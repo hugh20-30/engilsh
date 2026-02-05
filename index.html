@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Grammar Master: Final Exam</title>
+    <style>
+        :root { --primary: #1890ff; --success: #52c41a; --danger: #ff4d4f; --bg: #000000; --card-bg: #1a1a1a; --text: #ffffff; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 700px; }
+        .mode-switch { display: flex; gap: 10px; margin-bottom: 20px; }
+        .mode-btn { flex: 1; padding: 15px; border: 1px solid #333; border-radius: 10px; cursor: pointer; background: #222; color: #aaa; font-weight: bold; }
+        .active-mode { background: var(--primary); color: white; border-color: var(--primary); }
+        .card { background: var(--card-bg); padding: 30px; border-radius: 20px; border: 1px solid #333; min-height: 350px; display: flex; flex-direction: column; position: relative; }
+        #flash-area:fullscreen { display: flex; align-items: center; justify-content: center; background: var(--bg); }
+        #flashcard-display { font-size: 1.6em; text-align: center; margin: auto; }
+        .control-btns { position: absolute; top: 15px; right: 15px; display: flex; gap: 10px; }
+        .icon-btn { background: #333; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 0.8em; }
+        .stats-bar { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold; color: var(--primary); }
+        .timer-track { width: 100%; height: 8px; background: #333; border-radius: 4px; margin-bottom: 20px; overflow: hidden; }
+        #timer-fill { height: 100%; width: 100%; background: var(--danger); transition: width 1s linear; }
+        .sentence-box { font-size: 1.4em; padding: 25px; background: #222; border: 2px dashed #444; border-radius: 12px; margin-bottom: 20px; text-align: center; color: #ffd666; }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .quiz-btn { padding: 14px; border-radius: 8px; border: 1px solid #444; background: #1a1a1a; color: white; cursor: pointer; }
+        .correct-ans { background: var(--success) !important; }
+        .wrong-ans { background: var(--danger) !important; }
+        #explanation { margin-top: 15px; padding: 15px; border-radius: 8px; display: none; background: #111; border: 1px solid #333; }
+        #next-btn, #restart-btn { width: 100%; margin-top: 20px; background: var(--primary); color: white; border: none; padding: 15px; border-radius: 10px; cursor: pointer; font-size: 1.1em; display: none; }
+        .grade-screen { text-align: center; }
+        .big-grade { font-size: 5em; font-weight: bold; margin: 20px 0; color: var(--success); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="mode-switch">
+        <button id="btn-flash" class="mode-btn active-mode" onclick="switchMode('flash')">Flashcards</button>
+        <button id="btn-quiz" class="mode-btn" onclick="switchMode('quiz')">Final Exam</button>
+    </div>
+
+    <div id="flash-area" class="card" onclick="flipCard()">
+        <div class="control-btns">
+            <button class="icon-btn" onclick="toggleFullScreen(event)">📂 Full Screen</button>
+            <button class="icon-btn" style="background: var(--success);" onclick="shuffleFlashcards(event)">🔀 Shuffle</button>
+        </div>
+        <div id="flashcard-display">Start Studying</div>
+        <div style="color:#555; font-size:0.8em; margin-top:20px; text-align: center;">Click to flip</div>
+    </div>
+
+    <div id="quiz-area" class="card" style="display:none;">
+        <div id="quiz-content">
+            <div class="stats-bar">
+                <span>QUESTION: <span id="q-count">1</span>/20</span>
+                <span>SCORE: <span id="score">0</span></span>
+            </div>
+            <div class="timer-track"><div id="timer-fill"></div></div>
+            <div id="sentence-display" class="sentence-box"></div>
+            <div class="btn-grid" id="options"></div>
+            <div id="explanation"></div>
+            <button id="next-btn" onclick="nextQuestion()">NEXT QUESTION →</button>
+        </div>
+        <div id="result-screen" class="grade-screen" style="display:none;">
+            <h2>Exam Results</h2>
+            <div class="big-grade" id="final-grade">A</div>
+            <p id="final-score-text"></p>
+            <button id="restart-btn" style="display:block;" onclick="startQuiz()">RETAKE EXAM</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let flashcards = [
+        { q: "How to find the Subject?", a: "Find verb, then ask 'Who or what is doing it?'" },
+        { q: "Direct Object (DO) Test?", a: "Ask '[Action Verb] + What/Whom?'" },
+        { q: "Indirect Object (IO) Rule?", a: "Between Verb and DO. No 'to' or 'for'!" },
+        { q: "Predicate Nominative?", a: "Noun renaming the subject after Linking Verb." },
+        { q: "Predicate Adjective?", a: "Adjective describing the subject after Linking Verb." },
+        { q: "Prepositional Phrase?", a: "Starts with prep (in, on, to). No S or V inside." }
+    ];
+
+    const bank = [
+        { s: "I bought <u>my mom</u> a gift.", a: "Indirect Object", h: "No 'for' used!" },
+        { s: "I bought a gift <u>for my mom</u>.", a: "Prepositional Phrase", h: "'For' makes it a phrase." },
+        { s: "The <u>manager</u> quit today.", a: "Subject", h: "The doer of the action." },
+        { s: "The coffee <u>tastes</u> bitter.", a: "Verb", h: "Linking verb." },
+        { s: "She is a <u>hero</u>.", a: "Predicate Nominative", h: "Noun renaming her." },
+        { s: "He feels <u>happy</u>.", a: "Predicate Adjective", h: "Describes the subject." },
+        { s: "I sent <u>him</u> a text.", a: "Indirect Object", h: "Between verb and DO." },
+        { s: "He sent a text <u>to him</u>.", a: "Prepositional Phrase", h: "'To' makes it a phrase." },
+        { s: "We painted <u>the house</u>.", a: "Direct Object", h: "Action verb + what?" },
+        { s: "The cat sat <u>on the mat</u>.", a: "Prepositional Phrase", h: "Location phrase." },
+        { s: "<u>They</u> are coming.", a: "Subject", h: "Who is coming?" },
+        { s: "The soup <u>is</u> hot.", a: "Verb", h: "Linking verb." },
+        { s: "My dad is a <u>doctor</u>.", a: "Predicate Nominative", h: "Renames dad." },
+        { s: "The movie was <u>scary</u>.", a: "Predicate Adjective", h: "Describes movie." },
+        { s: "Give <u>the dog</u> a bone.", a: "Indirect Object", h: "Recipient of the bone." },
+        { s: "Kick <u>the ball</u>.", a: "Direct Object", h: "Received the kick." },
+        { s: "I ran <u>into the store</u>.", a: "Prepositional Phrase", h: "Direction phrase." },
+        { s: "The <u>pizza</u> was cold.", a: "Subject", h: "What was cold?" },
+        { s: "She <u>became</u> a teacher.", a: "Verb", h: "Linking verb." },
+        { s: "You look <u>tired</u>.", a: "Predicate Adjective", h: "Describes you." }
+    ];
+
+    let currentQuestions = [], flashIdx = 0, isFlipped = false, quizIdx = 0, score = 0, timeLeft = 10, timer;
+
+    function toggleFullScreen(e) { e.stopPropagation(); let elem = document.getElementById("flash-area"); if (!document.fullscreenElement) elem.requestFullscreen(); else document.exitFullscreen(); }
+
+    function switchMode(mode) {
+        document.getElementById('flash-area').style.display = mode === 'flash' ? 'flex' : 'none';
+        document.getElementById('quiz-area').style.display = mode === 'quiz' ? 'flex' : 'none';
+        document.getElementById('btn-flash').className = 'mode-btn ' + (mode === 'flash' ? 'active-mode' : '');
+        document.getElementById('btn-quiz').className = 'mode-btn ' + (mode === 'quiz' ? 'active-mode' : '');
+        if(mode === 'quiz') startQuiz();
+    }
+
+    function showFlash() { const c = flashcards[flashIdx]; document.getElementById('flashcard-display').innerText = isFlipped ? c.a : c.q; }
+    function flipCard() { if(isFlipped) { flashIdx = (flashIdx + 1) % flashcards.length; isFlipped = false; } else isFlipped = true; showFlash(); }
+    function shuffleFlashcards(e) { e.stopPropagation(); flashcards.sort(() => Math.random() - 0.5); flashIdx = 0; isFlipped = false; showFlash(); }
+
+    function startQuiz() {
+        currentQuestions = [...bank].sort(() => Math.random() - 0.5).slice(0, 20);
+        quizIdx = 0; score = 0;
+        document.getElementById('quiz-content').style.display = "block";
+        document.getElementById('result-screen').style.display = "none";
+        loadQuestion();
+    }
+
+    function loadQuestion() {
+        const q = currentQuestions[quizIdx];
+        document.getElementById('q-count').innerText = quizIdx + 1;
+        document.getElementById('score').innerText = score;
+        document.getElementById('sentence-display').innerHTML = q.s;
+        document.getElementById('explanation').style.display = "none";
+        document.getElementById('next-btn').style.display = "none";
+        const opts = ["Subject", "Verb", "Direct Object", "Indirect Object", "Prepositional Phrase", "Predicate Nominative", "Predicate Adjective"];
+        const grid = document.getElementById('options');
+        grid.innerHTML = '';
+        opts.forEach(o => {
+            const b = document.createElement('button');
+            b.className = 'quiz-btn'; b.innerText = o;
+            b.onclick = () => checkAnswer(o, b);
+            grid.appendChild(b);
+        });
+        resetTimer();
+    }
+
+    function resetTimer() {
+        clearInterval(timer); timeLeft = 10;
+        timer = setInterval(() => {
+            timeLeft--; updateTimerUI();
+            if(timeLeft <= 0) { clearInterval(timer); endTurn(false, "TIME'S UP"); }
+        }, 1000);
+    }
+
+    function updateTimerUI() {
+        document.getElementById('timer-fill').style.width = (timeLeft * 10) + "%";
+    }
+
+    function checkAnswer(choice, btn) {
+        clearInterval(timer);
+        const q = currentQuestions[quizIdx];
+        if(choice === q.a) { score++; btn.classList.add('correct-ans'); endTurn(true, "CORRECT"); }
+        else { btn.classList.add('wrong-ans'); endTurn(false, "INCORRECT"); }
+    }
+
+    function endTurn(isCorrect, title) {
+        const q = currentQuestions[quizIdx];
+        const exp = document.getElementById('explanation');
+        exp.style.display = "block"; exp.style.color = isCorrect ? "#52c41a" : "#ff4d4f";
+        exp.innerHTML = `<strong>${title}</strong><br>Answer: <strong>${q.a}</strong>. ${q.h}`;
+        document.querySelectorAll('.quiz-btn').forEach(b => b.disabled = true);
+        document.getElementById('next-btn').style.display = "block";
+    }
+
+    function nextQuestion() {
+        quizIdx++;
+        if(quizIdx < currentQuestions.length) loadQuestion();
+        else showResults();
+    }
+
+    function showResults() {
+        document.getElementById('quiz-content').style.display = "none";
+        document.getElementById('result-screen').style.display = "block";
+        const percent = (score / 20) * 100;
+        let grade = "F";
+        if(percent >= 90) grade = "A";
+        else if(percent >= 80) grade = "B";
+        else if(percent >= 70) grade = "C";
+        else if(percent >= 60) grade = "D";
+        document.getElementById('final-grade').innerText = grade;
+        document.getElementById('final-score-text').innerText = `You got ${score} out of 20 correct! (${percent}%)`;
+    }
+    showFlash();
+</script>
+</body>
+</html>
